@@ -1,5 +1,6 @@
 # BitwardenDecrypt
-Decrypts an encrypted [Bitwarden](https://github.com/bitwarden) data.json file (from the desktop App).
+Decrypts an encrypted [Bitwarden](https://github.com/bitwarden) data.json file (from the desktop App).  
+You can safely store data.json as an encrypted, offline backup of your vault knowing you will always be able to decrypt it.
 
 To determine the location of the data.json file see:  
 https://bitwarden.com/help/article/where-is-data-stored-computer/
