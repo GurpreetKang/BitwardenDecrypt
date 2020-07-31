@@ -22,7 +22,7 @@ or
 ```
 On Windows:
 ```
-py BitwardenDecrypt
+py BitwardenDecrypt.py
 or
 py BitwardenDecrypt.py inputfile
 
