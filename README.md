@@ -41,8 +41,9 @@ https://paypal.me/GurpreetKang
 
 ## Limitations
 
-- No validation of the CipherString.  
-I.e. No verification of the MAC before decrypting.
+- ~~No validation of the CipherString.
+I.e. No verification of the MAC before decrypting.~~ Now verifies the MAC.
+
 
 ## To Do
 [ ] Nothing.
