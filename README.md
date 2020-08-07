@@ -43,6 +43,7 @@ https://paypal.me/GurpreetKang
 
 - ~~No validation of the CipherString.
 I.e. No verification of the MAC before decrypting.~~ Now verifies the MAC.
+- Can only decrypt EncryptionType: 2 (AesCbc256_HmacSha256_B64).  At the time of writing this is the default used for all entries.
 
 
 ## To Do
