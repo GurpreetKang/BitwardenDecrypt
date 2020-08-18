@@ -11,6 +11,8 @@ Outputs JSON containing:
 - Secure Notes
 - Identities
 - Folders
+- Organizations
+- Collections
 
 *Note: Outputs (almost) all key/value pairs, including ones you probably don't care about.*
 
@@ -44,7 +46,8 @@ https://paypal.me/GurpreetKang
 - ~~No validation of the CipherString.
 I.e. No verification of the MAC before decrypting.~~ Now verifies the MAC.
 - Can only decrypt EncryptionType: 2 (AesCbc256_HmacSha256_B64).  At the time of writing this is the default used for all entries in the personal vault.
-- Does not decrypt anything from a Collection (Organization).
+- ~~Does not decrypt anything from a Collection (Organization).~~<br>Initial support for decrypting items from a Collection (Organization). This adds support for decrypting EncryptionType: 4 (Rsa2048_OaepSha1_B64)
+<br> *Note: Only tested with Personal/Free account (1 Organizaion).*
 
 
 ## To Do

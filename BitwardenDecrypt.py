@@ -47,15 +47,83 @@ try:
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
     from cryptography.hazmat.primitives import padding
+    from cryptography.hazmat.primitives.asymmetric import rsa, padding as asymmetricpadding
+    from cryptography.hazmat.primitives.serialization import load_der_private_key
 except ModuleNotFoundError:
     print("This script depends on the 'cryptography' package")
     print("pip install cryptography")
     exit(1)
 
 
+def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
+    BitwardenSecrets = {}
+    BitwardenSecrets['email']           = email
+    BitwardenSecrets['kdfIterations']   = kdfIterations
+    BitwardenSecrets['MasterPassword']  = password
+    BitwardenSecrets['ProtectedSymmetricKey'] = encKey
+    BitwardenSecrets['ProtectedRSAPrivateKey'] = encPrivateKey
 
-def decodeMasterEncryptionKey(CipherString, masterkey, mastermac):
-    encType     = int(CipherString.split(".")[0])   # Not Currently Used
+    
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=bytes(BitwardenSecrets['email'], 'utf-8'),
+        iterations=BitwardenSecrets['kdfIterations'],
+        backend=default_backend()
+        )
+    BitwardenSecrets['MasterKey']       = kdf.derive(BitwardenSecrets['MasterPassword'])
+    BitwardenSecrets['MasterKey_b64']   = base64.b64encode(BitwardenSecrets['MasterKey']).decode('utf-8')
+
+
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=bytes(BitwardenSecrets['MasterPassword']),
+        iterations=1,
+        backend=default_backend()
+        )
+    BitwardenSecrets['MasterPasswordHash']  = base64.b64encode(kdf.derive(BitwardenSecrets['MasterKey'])).decode('utf-8')
+
+
+    hkdf = HKDFExpand(
+        algorithm=hashes.SHA256(),
+        length=32,
+        info=b"enc",
+        backend=default_backend()
+        )
+    BitwardenSecrets['StretchedEncryptionKey']      = hkdf.derive(BitwardenSecrets['MasterKey'])
+    BitwardenSecrets['StretchedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['StretchedEncryptionKey']).decode('utf-8')
+
+    hkdf = HKDFExpand(
+        algorithm=hashes.SHA256(),
+        length=32,
+        info=b"mac",
+        backend=default_backend()
+        )
+    BitwardenSecrets['StretchedMacKey']     = hkdf.derive(BitwardenSecrets['MasterKey'])
+    BitwardenSecrets['StretchedMacKey_b64'] = base64.b64encode(BitwardenSecrets['StretchedMacKey']).decode('utf-8')
+
+    BitwardenSecrets['StretchedMasterKey']      = BitwardenSecrets['StretchedEncryptionKey'] + BitwardenSecrets['StretchedMacKey']
+    BitwardenSecrets['StretchedMasterKey_b64']  = base64.b64encode(BitwardenSecrets['StretchedMasterKey']).decode('utf-8')
+
+    BitwardenSecrets['GeneratedSymmetricKey'], \
+    BitwardenSecrets['GeneratedEncryptionKey'], \
+    BitwardenSecrets['GeneratedMACKey']             = decryptMasterEncryptionKey(BitwardenSecrets['ProtectedSymmetricKey'], BitwardenSecrets['StretchedEncryptionKey'], BitwardenSecrets['StretchedMacKey'])
+    BitwardenSecrets['GeneratedSymmetricKey_b64']   = base64.b64encode(BitwardenSecrets['GeneratedSymmetricKey']).decode('utf-8')
+    BitwardenSecrets['GeneratedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['GeneratedEncryptionKey']).decode('utf-8')
+    BitwardenSecrets['GeneratedMACKey_b64']         = base64.b64encode(BitwardenSecrets['GeneratedMACKey']).decode('utf-8')
+
+
+    BitwardenSecrets['RSAPrivateKey'] = decryptRSAPrivateKey(BitwardenSecrets['ProtectedRSAPrivateKey'], \
+                                                            BitwardenSecrets['GeneratedEncryptionKey'], \
+                                                            BitwardenSecrets['GeneratedMACKey'])
+
+    return(BitwardenSecrets)
+
+
+
+def decryptMasterEncryptionKey(CipherString, masterkey, mastermac):
+    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
     iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
     ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
     mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
@@ -66,11 +134,12 @@ def decodeMasterEncryptionKey(CipherString, masterkey, mastermac):
     h.update(iv)
     h.update(ciphertext)
     calculatedMAC = h.finalize()
+    
     if mac != calculatedMAC:
         print("ERROR: MAC did not match. Master Encryption Key was not decrypted.")
         exit(1)
 
-    
+
     unpadder    = padding.PKCS7(128).unpadder()
     cipher      = Cipher(algorithms.AES(masterkey), modes.CBC(iv), backend=default_backend())
     decryptor   = cipher.decryptor() 
@@ -90,12 +159,43 @@ def decodeMasterEncryptionKey(CipherString, masterkey, mastermac):
     return([stretchedmasterkey,enc,mac])
 
 
-def decodeCipherString(CipherString, key, mackey):
+def decryptRSAPrivateKey(CipherString, key, mackey):
     if not CipherString:
         return(None)
 
     
-    encType     = int(CipherString.split(".")[0])   # Not Currently Used
+    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
+    iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
+    ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
+    mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
+
+
+    # Calculate CipherString MAC
+    h = hmac.HMAC(mackey, hashes.SHA256(), backend=default_backend())
+    h.update(iv)
+    h.update(ciphertext)
+    calculatedMAC = h.finalize()
+
+    if mac == calculatedMAC:       
+        unpadder    = padding.PKCS7(128).unpadder()
+        cipher      = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        decryptor   = cipher.decryptor() 
+        decrypted   = decryptor.update(ciphertext) + decryptor.finalize()
+        cleartext   = unpadder.update(decrypted) + unpadder.finalize()
+
+        return(cleartext)
+
+    else:
+        return("ERROR: MAC did not match. RSA Private Key not decrypted.")
+
+
+
+def decryptCipherString(CipherString, key, mackey):
+    if not CipherString:
+        return(None)
+
+    
+    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
     iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
     ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
     mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
@@ -120,10 +220,21 @@ def decodeCipherString(CipherString, key, mackey):
         return("ERROR: MAC did not match. CipherString not decrypted.")
 
 
+def decryptRSA(CipherString, key):
+    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 4
+    ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[0])
+    private_key = load_der_private_key(key, password=None, backend=default_backend())
+
+    plaintext = private_key.decrypt(ciphertext, asymmetricpadding.OAEP(mgf=asymmetricpadding.MGF1(algorithm=hashes.SHA1()), \
+                                                                        algorithm=hashes.SHA1(), \
+                                                                        label=None))
+
+    return(plaintext)
+
 
 def decryptBitwardenJSON(inputfile):
     BitwardenSecrets = {}
-    decodedEntries = {}
+    decryptedEntries = {}
 
     try:
         with open(inputfile) as f:
@@ -132,62 +243,34 @@ def decryptBitwardenJSON(inputfile):
         print("ERROR: " + inputfile + " not found.")
         exit(1)
 
+    BitwardenSecrets  = getBitwardenSecrets(datafile["userEmail"], \
+                                            getpass.getpass().encode("utf-8"), \
+                                            datafile["kdfIterations"], \
+                                            datafile["encKey"], \
+                                            datafile["encPrivateKey"]    )
 
-    BitwardenSecrets['email']           = datafile["userEmail"]
-    BitwardenSecrets['kdfIterations']   = datafile["kdfIterations"]
-    BitwardenSecrets['MasterPassword']  = getpass.getpass().encode("utf-8")
-    BitwardenSecrets['ProtectedSymmetricKey'] = datafile["encKey"]
-
-
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=bytes(BitwardenSecrets['email'], 'utf-8'),
-        iterations=BitwardenSecrets['kdfIterations'],
-        backend=default_backend()
-        )
-    BitwardenSecrets['MasterKey']       = kdf.derive(BitwardenSecrets['MasterPassword'])
-    BitwardenSecrets['MasterKey_b64']   = base64.b64encode(BitwardenSecrets['MasterKey']).decode('utf-8')
+    
 
 
-    hkdf = HKDFExpand(
-        algorithm=hashes.SHA256(),
-        length=32,
-        info=b"enc",
-        backend=default_backend()
-        )
-    BitwardenSecrets['StretchedEncryptionKey']      = hkdf.derive(BitwardenSecrets['MasterKey'])
-    BitwardenSecrets['StretchedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['StretchedEncryptionKey']).decode('utf-8')
+    BitwardenSecrets['OrgSecrets'] = {}
+    encOrgKeys = list(datafile["encOrgKeys"])
 
-    hkdf = HKDFExpand(
-        algorithm=hashes.SHA256(),
-        length=32,
-        info=b"mac",
-        backend=default_backend()
-        )
-    BitwardenSecrets['StretchedMacKey']     = hkdf.derive(BitwardenSecrets['MasterKey'])
-    BitwardenSecrets['StretchedMacKey_b64'] = base64.b64encode(BitwardenSecrets['StretchedMacKey']).decode('utf-8')
+    for i in encOrgKeys:
+        BitwardenSecrets['OrgSecrets'][i] = decryptRSA(datafile["encOrgKeys"][i], BitwardenSecrets['RSAPrivateKey'])
 
-    BitwardenSecrets['StretchedMasterKey']      = BitwardenSecrets['StretchedEncryptionKey'] + BitwardenSecrets['StretchedMacKey']
-    BitwardenSecrets['StretchedMasterKey_b64']  = base64.b64encode(BitwardenSecrets['StretchedMasterKey']).decode('utf-8')
-
- 
-    BitwardenSecrets['GeneratedSymmetricKey'], \
-    BitwardenSecrets['GeneratedEncryptionKey'], \
-    BitwardenSecrets['GeneratedMACKey']             = decodeMasterEncryptionKey(datafile["encKey"], BitwardenSecrets['StretchedEncryptionKey'], BitwardenSecrets['StretchedMacKey'])
-    BitwardenSecrets['GeneratedSymmetricKey_b64']   = base64.b64encode(BitwardenSecrets['GeneratedSymmetricKey']).decode('utf-8')
-    BitwardenSecrets['GeneratedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['GeneratedEncryptionKey']).decode('utf-8')
-    BitwardenSecrets['GeneratedMACKey_b64']         = base64.b64encode(BitwardenSecrets['GeneratedMACKey']).decode('utf-8')
-
-
+    
     regexPattern = re.compile(r"\d\.[^,]+\|[^,]+=+")
-
+    
     for a in datafile:
 
         if a.startswith('folders_'):
             group = "folders"
         elif a.startswith('ciphers_'):
             group = "items"
+        elif a.startswith('organizations_'):
+            group = "organizations"
+        elif a.startswith('collections_'):
+            group = "collections"
         else:
             group = None
 
@@ -205,8 +288,16 @@ def decryptBitwardenJSON(inputfile):
                     if type(groupItem) is dict:
                         tempString = json.dumps(c)
 
+                        try:
+                            if (len(groupItem['organizationId'])) > 0:
+                                encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
+                                macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
+                        except Exception:
+                            encKey = BitwardenSecrets['GeneratedEncryptionKey']
+                            macKey = BitwardenSecrets['GeneratedMACKey']
+
                         for match in regexPattern.findall(tempString):    
-                            jsonEscapedString = json.JSONEncoder().encode(decodeCipherString(match, BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey']))
+                            jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
                             jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
                             tempString = tempString.replace(match, jsonEscapedString)
 
@@ -216,9 +307,9 @@ def decryptBitwardenJSON(inputfile):
 
                         groupItemsList.append(json.loads(tempString))
                     
-            decodedEntries[group] = groupItemsList
+            decryptedEntries[group] = groupItemsList
 
-    return(decodedEntries)
+    return(json.dumps(decryptedEntries, indent=2))
 
 
 def main():
@@ -227,7 +318,9 @@ def main():
     else:
         inputfile = "data.json"
 
-    print(json.dumps(decryptBitwardenJSON(inputfile), indent=2))
+    decryptedJSON = decryptBitwardenJSON(inputfile)
+    print(decryptedJSON)
+    
 
 if __name__ == "__main__":
           main()
