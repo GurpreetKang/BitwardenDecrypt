@@ -21,6 +21,8 @@ Outputs JSON containing:
 ./BitwardenDecrypt.py  (reads data.json from current directory)
 or
 ./BitwardenDecrypt.py inputfile
+
+Password: (Enter Password)
 ```
 On Windows:
 ```
