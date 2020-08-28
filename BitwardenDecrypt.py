@@ -276,7 +276,7 @@ def decryptBitwardenJSON(inputfile):
 
 
         if group:
-            groupData = ast.literal_eval(str(datafile[a]))
+            groupData = json.loads(json.dumps(datafile[a]))
             groupItemsList = []
     
             for b in groupData.items():
