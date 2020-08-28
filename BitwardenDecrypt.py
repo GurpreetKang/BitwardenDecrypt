@@ -30,7 +30,6 @@
 #
 
 
-import ast
 import base64
 import getpass
 import json
