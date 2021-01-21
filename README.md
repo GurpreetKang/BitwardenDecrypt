@@ -5,6 +5,11 @@ You can safely store data.json as an encrypted, offline backup of your vault kno
 To determine the location of the data.json file see:  
 https://bitwarden.com/help/article/where-is-data-stored-computer/
 
+*Note: BitwardenDecrypt does not work with Bitwarden Encrypted JSON Exports.<br/>
+These exports lack the Protected Symmetric Key needed to decrypt entries.*
+
+<br/>
+
 Outputs JSON containing:
 - Logins
 - Cards
@@ -45,11 +50,13 @@ https://paypal.me/GurpreetKang
 
 ## Limitations
 
+- Does not work with Bitwarden Encrypted JSON Exports.
+<br/>*These exports lack the Protected Symmetric Key needed to decrypt entries.*
 - ~~No validation of the CipherString.
 I.e. No verification of the MAC before decrypting.~~ Now verifies the MAC.
 - Can only decrypt EncryptionType: 2 (AesCbc256_HmacSha256_B64).  At the time of writing this is the default used for all entries in the personal vault.
-- ~~Does not decrypt anything from a Collection (Organization).~~<br>Initial support for decrypting items from a Collection (Organization). This adds support for decrypting EncryptionType: 4 (Rsa2048_OaepSha1_B64)
-<br> *Note: Only tested with Personal/Free account (1 Organizaion).*
+- ~~Does not decrypt anything from a Collection (Organization).~~<br/>Initial support for decrypting items from a Collection (Organization). This adds support for decrypting EncryptionType: 4 (Rsa2048_OaepSha1_B64)
+<br/>*Note: Only tested with Personal/Free account (1 Organizaion).*
 
 
 ## To Do
