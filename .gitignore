@@ -127,4 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Bitwarden secrets (data.json)
 *.json
