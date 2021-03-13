@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2020 Gurpreet Kang
+# Copyright © 2020-2021 Gurpreet Kang
 # All rights reserved.
 #
 # Released under the "GNU General Public License v3.0". Please see the LICENSE.
@@ -308,7 +308,7 @@ def decryptBitwardenJSON(inputfile):
                     
             decryptedEntries[group] = groupItemsList
 
-    return(json.dumps(decryptedEntries, indent=2))
+    return(json.dumps(decryptedEntries, indent=2, ensure_ascii=False))
 
 
 def main():
