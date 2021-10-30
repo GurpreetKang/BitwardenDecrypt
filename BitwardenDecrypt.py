@@ -213,7 +213,12 @@ def decryptCipherString(CipherString, key, mackey):
         decrypted   = decryptor.update(ciphertext) + decryptor.finalize()
         cleartext   = unpadder.update(decrypted) + unpadder.finalize()
 
-        return(cleartext.decode('utf-8'))
+        try:
+            cleartext = cleartext.decode('utf-8')
+        except UnicodeDecodeError as e:
+            cleartext = f"ERROR decrypting: {CipherString}"
+
+        return(cleartext)
 
     else:
         return("ERROR: MAC did not match. CipherString not decrypted.")
