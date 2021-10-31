@@ -234,11 +234,11 @@ def decryptRSA(CipherString, key):
     ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[0])
     private_key = load_der_private_key(key, password=None, backend=default_backend())
 
-    plaintext = private_key.decrypt(ciphertext, asymmetricpadding.OAEP(mgf=asymmetricpadding.MGF1(algorithm=hashes.SHA1()), \
+    cleartext = private_key.decrypt(ciphertext, asymmetricpadding.OAEP(mgf=asymmetricpadding.MGF1(algorithm=hashes.SHA1()), \
                                                                         algorithm=hashes.SHA1(), \
                                                                         label=None))
 
-    return(plaintext)
+    return(cleartext)
 
 
 def decryptBitwardenJSON(inputfile):
