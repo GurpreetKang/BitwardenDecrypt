@@ -53,9 +53,9 @@ except ModuleNotFoundError:
     print("pip install cryptography")
     exit(1)
 
+BitwardenSecrets = {}
 
 def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
-    BitwardenSecrets = {}
     BitwardenSecrets['email']           = email
     BitwardenSecrets['kdfIterations']   = kdfIterations
     BitwardenSecrets['MasterPassword']  = password
@@ -99,15 +99,15 @@ def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
         info=b"mac",
         backend=default_backend()
         )
-    BitwardenSecrets['StretchedMacKey']     = hkdf.derive(BitwardenSecrets['MasterKey'])
-    BitwardenSecrets['StretchedMacKey_b64'] = base64.b64encode(BitwardenSecrets['StretchedMacKey']).decode('utf-8')
+    BitwardenSecrets['StretchedMACKey']     = hkdf.derive(BitwardenSecrets['MasterKey'])
+    BitwardenSecrets['StretchedMACKey_b64'] = base64.b64encode(BitwardenSecrets['StretchedMACKey']).decode('utf-8')
 
-    BitwardenSecrets['StretchedMasterKey']      = BitwardenSecrets['StretchedEncryptionKey'] + BitwardenSecrets['StretchedMacKey']
+    BitwardenSecrets['StretchedMasterKey']      = BitwardenSecrets['StretchedEncryptionKey'] + BitwardenSecrets['StretchedMACKey']
     BitwardenSecrets['StretchedMasterKey_b64']  = base64.b64encode(BitwardenSecrets['StretchedMasterKey']).decode('utf-8')
 
     BitwardenSecrets['GeneratedSymmetricKey'], \
     BitwardenSecrets['GeneratedEncryptionKey'], \
-    BitwardenSecrets['GeneratedMACKey']             = decryptMasterEncryptionKey(BitwardenSecrets['ProtectedSymmetricKey'], BitwardenSecrets['StretchedEncryptionKey'], BitwardenSecrets['StretchedMacKey'])
+    BitwardenSecrets['GeneratedMACKey']             = decryptMasterEncryptionKey(BitwardenSecrets['ProtectedSymmetricKey'], BitwardenSecrets['StretchedEncryptionKey'], BitwardenSecrets['StretchedMACKey'])
     BitwardenSecrets['GeneratedSymmetricKey_b64']   = base64.b64encode(BitwardenSecrets['GeneratedSymmetricKey']).decode('utf-8')
     BitwardenSecrets['GeneratedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['GeneratedEncryptionKey']).decode('utf-8')
     BitwardenSecrets['GeneratedMACKey_b64']         = base64.b64encode(BitwardenSecrets['GeneratedMACKey']).decode('utf-8')
@@ -117,7 +117,7 @@ def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
                                                             BitwardenSecrets['GeneratedEncryptionKey'], \
                                                             BitwardenSecrets['GeneratedMACKey'])
 
-    return(BitwardenSecrets)
+    return
 
 
 
@@ -216,8 +216,13 @@ def decryptCipherString(CipherString, key, mackey):
         try:
             cleartext = cleartext.decode('utf-8')
         except UnicodeDecodeError as e:
-            cleartext = f"ERROR decrypting: {CipherString}"
+            try:
+                # Try to decrypt CipherString as an Attachment Protected Symmetric Key
+                cleartext = decryptMasterEncryptionKey(CipherString, BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0].hex()
+            except:
+                cleartext = f"ERROR decrypting: {CipherString}"
 
+        
         return(cleartext)
 
     else:
@@ -237,7 +242,6 @@ def decryptRSA(CipherString, key):
 
 
 def decryptBitwardenJSON(inputfile):
-    BitwardenSecrets = {}
     decryptedEntries = {}
 
     try:
@@ -247,11 +251,11 @@ def decryptBitwardenJSON(inputfile):
         print("ERROR: " + inputfile + " not found.")
         exit(1)
 
-    BitwardenSecrets  = getBitwardenSecrets(datafile["userEmail"], \
-                                            getpass.getpass().encode("utf-8"), \
-                                            datafile["kdfIterations"], \
-                                            datafile["encKey"], \
-                                            datafile["encPrivateKey"]    )
+    getBitwardenSecrets(datafile["userEmail"], \
+        getpass.getpass().encode("utf-8"), \
+        datafile["kdfIterations"], \
+        datafile["encKey"], \
+        datafile["encPrivateKey"]    )
 
     
 
@@ -324,7 +328,7 @@ def main():
 
     decryptedJSON = decryptBitwardenJSON(inputfile)
     print(decryptedJSON)
-    
+
 
 if __name__ == "__main__":
           main()
