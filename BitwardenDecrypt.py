@@ -294,7 +294,7 @@ def decryptBitwardenJSON(inputfile):
                     groupItem = json.loads(json.dumps(c))
                     
                     if type(groupItem) is dict:
-                        tempString = json.dumps(c)
+                        tempString = json.dumps(groupItem)
 
                         try:
                             if (len(groupItem['organizationId'])) > 0:
