@@ -138,7 +138,7 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
     calculatedMAC = h.finalize()
     
     if mac != calculatedMAC:
-        print("ERROR: MAC did not match. Master Encryption Key was not decrypted.")
+        print("ERROR: MAC did not match. Protected Symmetric Key was not decrypted.")
         exit(1)
 
 
