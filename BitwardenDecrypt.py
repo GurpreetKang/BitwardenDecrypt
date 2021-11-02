@@ -14,6 +14,9 @@
 # To determine the location of the data.json file see:
 # https://bitwarden.com/help/article/where-is-data-stored-computer/
 #
+# Note: BitwardenDecrypt does not work with Bitwarden Encrypted JSON Exports.
+#       These exports lack the Protected Symmetric Key needed to decrypt entries.
+#
 #
 # Outputs JSON containing:
 #  - Logins
