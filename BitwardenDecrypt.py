@@ -110,7 +110,7 @@ def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
 
     BitwardenSecrets['GeneratedSymmetricKey'], \
     BitwardenSecrets['GeneratedEncryptionKey'], \
-    BitwardenSecrets['GeneratedMACKey']             = decryptMasterEncryptionKey(BitwardenSecrets['ProtectedSymmetricKey'], BitwardenSecrets['StretchedEncryptionKey'], BitwardenSecrets['StretchedMACKey'])
+    BitwardenSecrets['GeneratedMACKey']             = decryptProtectedSymmetricKey(BitwardenSecrets['ProtectedSymmetricKey'], BitwardenSecrets['StretchedEncryptionKey'], BitwardenSecrets['StretchedMACKey'])
     BitwardenSecrets['GeneratedSymmetricKey_b64']   = base64.b64encode(BitwardenSecrets['GeneratedSymmetricKey']).decode('utf-8')
     BitwardenSecrets['GeneratedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['GeneratedEncryptionKey']).decode('utf-8')
     BitwardenSecrets['GeneratedMACKey_b64']         = base64.b64encode(BitwardenSecrets['GeneratedMACKey']).decode('utf-8')
@@ -124,7 +124,7 @@ def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
 
 
 
-def decryptMasterEncryptionKey(CipherString, masterkey, mastermac):
+def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
     encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
     iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
     ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
@@ -221,7 +221,7 @@ def decryptCipherString(CipherString, key, mackey):
         except UnicodeDecodeError as e:
             try:
                 # Try to decrypt CipherString as an Attachment Protected Symmetric Key
-                cleartext = decryptMasterEncryptionKey(CipherString, BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0].hex()
+                cleartext = decryptProtectedSymmetricKey(CipherString, BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0].hex()
             except:
                 cleartext = f"ERROR decrypting: {CipherString}"
 
