@@ -45,7 +45,7 @@ import sys
 try:
     from cryptography.hazmat.primitives import hashes, hmac
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
     from cryptography.hazmat.primitives import padding
@@ -243,6 +243,32 @@ def decryptRSA(CipherString, key):
 
     return(cleartext)
 
+def decryptSend(send):
+    sendKey = decryptProtectedSymmetricKey(send['key'], BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0]
+    
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=64,
+        salt=b"bitwarden-send",
+        info=b"send",
+        backend=default_backend()
+        )
+    sendStretchedKey = hkdf.derive(sendKey)
+    sendEncKey = sendStretchedKey[0:32]
+    sendMACKey = sendStretchedKey[32:64]
+
+    send['key'] = sendStretchedKey.hex()
+    decryptedSend = json.dumps(send)
+
+    regexPattern = re.compile(r"\d\.[^,]+\|[^,]+=+")
+    
+    for match in regexPattern.findall(decryptedSend):    
+        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, sendEncKey, sendMACKey))
+        jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+        decryptedSend = decryptedSend.replace(match, jsonEscapedString)
+
+    return(decryptedSend)
+
 
 def decryptBitwardenJSON(inputfile):
     decryptedEntries = {}
@@ -282,6 +308,8 @@ def decryptBitwardenJSON(inputfile):
             group = "organizations"
         elif a.startswith('collections_'):
             group = "collections"
+        elif a.startswith('sends_'):
+            group = "sends"
         else:
             group = None
 
@@ -299,22 +327,27 @@ def decryptBitwardenJSON(inputfile):
                     if type(groupItem) is dict:
                         tempString = json.dumps(groupItem)
 
-                        try:
-                            if (len(groupItem['organizationId'])) > 0:
-                                encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
-                                macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
-                        except Exception:
-                            encKey = BitwardenSecrets['GeneratedEncryptionKey']
-                            macKey = BitwardenSecrets['GeneratedMACKey']
+                        if group == "sends":
+                            tempString = decryptSend(groupItem)  
 
-                        for match in regexPattern.findall(tempString):    
-                            jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
-                            jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
-                            tempString = tempString.replace(match, jsonEscapedString)
+                        else:
+                            try:
+                                if (len(groupItem['organizationId'])) > 0:
+                                    encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
+                                    macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
+                            except Exception:
+                                encKey = BitwardenSecrets['GeneratedEncryptionKey']
+                                macKey = BitwardenSecrets['GeneratedMACKey']
 
-                            # Get rid of the Bitwarden userId key/value pair.
-                            userIdString = "\"userId\": \"" + datafile["userId"] + "\","
-                            tempString = tempString.replace(userIdString, "")   
+                            for match in regexPattern.findall(tempString):    
+                                jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
+                                jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+                                tempString = tempString.replace(match, jsonEscapedString)
+                        
+                        
+                        # Get rid of the Bitwarden userId key/value pair.
+                        userIdString = f"\"userId\": \"{datafile['userId']}\","
+                        tempString = tempString.replace(userIdString, "")   
 
                         groupItemsList.append(json.loads(tempString))
                     
