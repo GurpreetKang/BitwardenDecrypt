@@ -277,7 +277,7 @@ def decryptBitwardenJSON(inputfile):
         with open(inputfile) as f:
             datafile = json.load(f)
     except:
-        print("ERROR: " + inputfile + " not found.")
+        print(f"ERROR: {inputfile} not found.")
         exit(1)
 
     getBitwardenSecrets(datafile["userEmail"], \
