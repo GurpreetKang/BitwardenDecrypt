@@ -54,7 +54,7 @@ try:
 except ModuleNotFoundError:
     print("This script depends on the 'cryptography' package")
     print("pip install cryptography")
-    exit(1)
+    sys.exit(1)
 
 BitwardenSecrets = {}
 
@@ -139,7 +139,7 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
     
     if mac != calculatedMAC:
         print("ERROR: MAC did not match. Protected Symmetric Key was not decrypted.")
-        exit(1)
+        sys.exit(1)
 
 
     unpadder    = padding.PKCS7(128).unpadder()
@@ -152,7 +152,7 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
     except:
         print()
         print("Wrong Password. Could Not Decode Protected Symmetric Key.")
-        exit(1)
+        sys.exit(1)
 
     stretchedmasterkey  = cleartext
     enc                 = stretchedmasterkey[0:32]
@@ -278,7 +278,7 @@ def decryptBitwardenJSON(inputfile):
             datafile = json.load(f)
     except:
         print(f"ERROR: {inputfile} not found.")
-        exit(1)
+        sys.exit(1)
 
     getBitwardenSecrets(datafile["userEmail"], \
         getpass.getpass().encode("utf-8"), \
