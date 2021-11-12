@@ -24,15 +24,19 @@
 #  - Secure Notes
 #  - Identities
 #  - Folders
+#  - Sends (Optional)
 # 
 #
-# Usage: ./BitwardenDecrypt.py  (reads data.json from current directory)
+# Usage: ./BitwardenDecrypt.py [options] (reads data.json from current directory)
 #        or
-#        ./BitwardenDecrypt.py inputfile
+#        ./BitwardenDecrypt.py [options] inputfile
 # Password: (Enter Password)
 #
+# Options:
+#       --includesends        Include Sends in the output.
 
 
+import argparse
 import base64
 import getpass
 import json
@@ -149,7 +153,7 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
 
     try:
         cleartext = unpadder.update(decrypted) + unpadder.finalize()
-    except:
+    except Exception as e:
         print()
         print("Wrong Password. Could Not Decode Protected Symmetric Key.")
         sys.exit(1)
@@ -222,7 +226,7 @@ def decryptCipherString(CipherString, key, mackey):
             try:
                 # Try to decrypt CipherString as an Attachment Protected Symmetric Key
                 cleartext = decryptProtectedSymmetricKey(CipherString, BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0].hex()
-            except:
+            except Exception as e:
                 cleartext = f"ERROR decrypting: {CipherString}"
 
         
@@ -270,14 +274,17 @@ def decryptSend(send):
     return(decryptedSend)
 
 
-def decryptBitwardenJSON(inputfile):
+def decryptBitwardenJSON(options):
     decryptedEntries = {}
 
     try:
-        with open(inputfile) as f:
+        with open(options.inputfile) as f:
             datafile = json.load(f)
-    except:
-        print(f"ERROR: {inputfile} not found.")
+    except FileNotFoundError:
+        print(f"ERROR: {options.inputfile} not found.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"ERROR: An error occured reading: {options.inputfile}")
         sys.exit(1)
 
     getBitwardenSecrets(datafile["userEmail"], \
@@ -285,8 +292,6 @@ def decryptBitwardenJSON(inputfile):
         datafile["kdfIterations"], \
         datafile["encKey"], \
         datafile["encPrivateKey"]    )
-
-    
 
 
     BitwardenSecrets['OrgSecrets'] = {}
@@ -308,7 +313,7 @@ def decryptBitwardenJSON(inputfile):
             group = "organizations"
         elif a.startswith('collections_'):
             group = "collections"
-        elif a.startswith('sends_'):
+        elif a.startswith('sends_') and options.includesends == True:
             group = "sends"
         else:
             group = None
@@ -335,7 +340,7 @@ def decryptBitwardenJSON(inputfile):
                                 if (len(groupItem['organizationId'])) > 0:
                                     encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
                                     macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
-                            except Exception:
+                            except Exception as e:
                                 encKey = BitwardenSecrets['GeneratedEncryptionKey']
                                 macKey = BitwardenSecrets['GeneratedMACKey']
 
@@ -356,15 +361,17 @@ def decryptBitwardenJSON(inputfile):
     return(json.dumps(decryptedEntries, indent=2, ensure_ascii=False))
 
 
-def main():
-    if len(sys.argv) == 2:
-        inputfile = sys.argv[1]
-    else:
-        inputfile = "data.json"
-
-    decryptedJSON = decryptBitwardenJSON(inputfile)
+def main(options):
+    decryptedJSON = decryptBitwardenJSON(options)
     print(decryptedJSON)
 
 
 if __name__ == "__main__":
-          main()
+    parser = argparse.ArgumentParser(allow_abbrev=False, description='Decrypts an encrypted Bitwarden data.json file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE (optional)')
+    parser.add_argument("--includesends", help="Include Sends in the output.", action="store_true", default=False)
+    args = parser.parse_args()
+
+    main(args)
+
+

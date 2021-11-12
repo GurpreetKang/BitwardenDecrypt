@@ -18,24 +18,31 @@ Outputs JSON containing:
 - Folders
 - Organizations
 - Collections
+- Sends *(Optional)*
 
 *Note: Outputs (almost) all key/value pairs, including ones you probably don't care about.*
 
 ### Usage: 
 ```
-./BitwardenDecrypt.py  (reads data.json from current directory)
+./BitwardenDecrypt.py [options]  (reads data.json from current directory)
 or
-./BitwardenDecrypt.py inputfile
+./BitwardenDecrypt.py [options] inputfile
 
 Password: (Enter Password)
+
+Options:
+        --includesends        Include Sends in the output.
 ```
 On Windows:
 ```
-py BitwardenDecrypt.py
+py BitwardenDecrypt.py [options]
 or
-py BitwardenDecrypt.py inputfile
+py BitwardenDecrypt.py [options] inputfile
 
 Password: (Enter Password)
+
+Options:
+        --includesends        Include Sends in the output.
 ```
 *Note: This script depends on the 'cryptography' package  
 pip install cryptography*
@@ -56,7 +63,6 @@ https://paypal.me/GurpreetKang
 I.e. No verification of the MAC before decrypting.~~ Now verifies the MAC.
 - Can only decrypt EncryptionType: 2 (AesCbc256_HmacSha256_B64).  At the time of writing this is the default used for all entries in the personal vault.
 - ~~Does not decrypt anything from a Collection (Organization).~~<br/>Initial support for decrypting items from a Collection (Organization). This adds support for decrypting EncryptionType: 4 (Rsa2048_OaepSha1_B64)
-<br/>*Note: Only tested with Personal/Free account (1 Organizaion).*
 
 
 ## To Do
