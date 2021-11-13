@@ -337,19 +337,22 @@ def decryptBitwardenJSON(options):
 
                         else:
                             try:
-                                if (len(groupItem['organizationId'])) > 0:
+                                if groupItem.get('organizationId') is None:
+                                    encKey = BitwardenSecrets['GeneratedEncryptionKey']
+                                    macKey = BitwardenSecrets['GeneratedMACKey']
+                                else:
                                     encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
                                     macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
-                            except Exception as e:
-                                encKey = BitwardenSecrets['GeneratedEncryptionKey']
-                                macKey = BitwardenSecrets['GeneratedMACKey']
 
-                            for match in regexPattern.findall(tempString):    
-                                jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
-                                jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
-                                tempString = tempString.replace(match, jsonEscapedString)
+                                for match in regexPattern.findall(tempString):    
+                                    jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
+                                    jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+                                    tempString = tempString.replace(match, jsonEscapedString)
+
+                            except Exception as e:
+                                print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")                        
                         
-                        
+
                         # Get rid of the Bitwarden userId key/value pair.
                         userIdString = f"\"userId\": \"{datafile['userId']}\","
                         tempString = tempString.replace(userIdString, "")   
@@ -373,5 +376,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
-
-
