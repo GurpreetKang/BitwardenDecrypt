@@ -347,6 +347,8 @@ def decryptBitwardenJSON(options):
                                 for match in regexPattern.findall(tempString):    
                                     jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
                                     jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+                                    #nothing gets printed, maybe regex doesn't match?
+                                    print(match,jsonEscapedString)
                                     tempString = tempString.replace(match, jsonEscapedString)
 
                             except Exception as e:
