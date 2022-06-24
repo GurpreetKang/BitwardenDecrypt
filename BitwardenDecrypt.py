@@ -287,11 +287,11 @@ def decryptBitwardenJSON(options):
         print(f"ERROR: An error occured reading: {options.inputfile}")
         sys.exit(1)
 
-    getBitwardenSecrets(datafile["userEmail"], \
+    getBitwardenSecrets(datafile["$profile-var?"]["profile"]["email"], \
         getpass.getpass().encode("utf-8"), \
-        datafile["kdfIterations"], \
-        datafile["encKey"], \
-        datafile["encPrivateKey"]    )
+        datafile["$profile-var?"]["profile"]["kdfIterations"], \
+        datafile['$profile-var?']['keys']['cryptoSymmetricKey']['encrypted'], \
+        datafile['$profile-var?']['keys']['privateKey']['encrypted']    )
 
 
     BitwardenSecrets['OrgSecrets'] = {}
