@@ -33,7 +33,9 @@
 # Password: (Enter Password)
 #
 # Options:
-#       --includesends        Include Sends in the output.
+#       --includesends          Include Sends in the output.
+#       --output OUTPUTFILE     Write decrypted output to file.
+#                               Will overwrite contents if file exists.
 
 
 import argparse
@@ -366,13 +368,22 @@ def decryptBitwardenJSON(options):
 
 def main(options):
     decryptedJSON = decryptBitwardenJSON(options)
-    print(decryptedJSON)
+
+    if (options.outputfile):
+        try:
+            with open(options.outputfile, "w") as file:
+                file.write(decryptedJSON)
+        except:
+            print(f"ERROR: Writing to {options.outputfile}")
+    else:
+        print(decryptedJSON)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(allow_abbrev=False, description='Decrypts an encrypted Bitwarden data.json file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE (optional)')
     parser.add_argument("--includesends", help="Include Sends in the output.", action="store_true", default=False)
+    parser.add_argument("--output", metavar='OUTPUTFILE', action="store", dest='outputfile', help='Saves decrypted output to OUTPUTFILE (optional)')
     args = parser.parse_args()
 
     main(args)
