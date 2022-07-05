@@ -1,5 +1,5 @@
 # BitwardenDecrypt
-Decrypts an encrypted [Bitwarden](https://github.com/bitwarden) data.json file (from the desktop App).  
+Decrypts an encrypted [Bitwarden](https://github.com/bitwarden) data.json file (from the Desktop App).  
 You can safely store data.json as an encrypted, offline backup of your vault knowing you will always be able to decrypt it.
 
 To determine the location of the data.json file see:  
@@ -12,12 +12,12 @@ These exports lack the Protected Symmetric Key needed to decrypt entries.*
 
 Outputs JSON containing:
 - Logins
-- Cards
-- Secure Notes
-- Identities
 - Folders
 - Organizations
 - Collections
+- Cards
+- Secure Notes
+- Identities
 - Sends *(Optional)*
 
 *Note: Outputs (almost) all key/value pairs, including ones you probably don't care about.*
@@ -31,7 +31,9 @@ or
 Password: (Enter Password)
 
 Options:
-        --includesends        Include Sends in the output.
+        --includesends          Include Sends in the output.
+        --output OUTPUTFILE     Write decrypted output to file.
+                                Will overwrite contents if file exists.
 ```
 On Windows:
 ```
@@ -42,7 +44,9 @@ py BitwardenDecrypt.py [options] inputfile
 Password: (Enter Password)
 
 Options:
-        --includesends        Include Sends in the output.
+        --includesends          Include Sends in the output.
+        --output OUTPUTFILE     Write decrypted output to file.
+                                Will overwrite contents if file exists.
 ```
 *Note: This script depends on the 'cryptography' package  
 pip install cryptography*
