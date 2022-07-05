@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright © 2020-2021 Gurpreet Kang
+# Copyright © 2020-2022 Gurpreet Kang
 # All rights reserved.
 #
 # Released under the "GNU General Public License v3.0". Please see the LICENSE.
@@ -9,7 +9,7 @@
 
 # BitwardenDecrypt
 #
-# Decrypts an encrypted Bitwarden data.json file (from the desktop App).
+# Decrypts an encrypted Bitwarden data.json file (from the Desktop App).
 #
 # To determine the location of the data.json file see:
 # https://bitwarden.com/help/article/where-is-data-stored-computer/
@@ -20,10 +20,12 @@
 #
 # Outputs JSON containing:
 #  - Logins
+#  - Folders
+#  - Organizations
+#  - Collections
 #  - Cards
 #  - Secure Notes
 #  - Identities
-#  - Folders
 #  - Sends (Optional)
 # 
 #
@@ -37,26 +39,28 @@
 #       --output OUTPUTFILE     Write decrypted output to file.
 #                               Will overwrite contents if file exists.
 
-
 import argparse
 import base64
+from   collections import OrderedDict
 import getpass
 import json
+import os
 import re
 import sys
+import uuid
 
 
 # This script depends on the 'cryptography' package
 # pip install cryptography
 try:
-    from cryptography.hazmat.primitives import hashes, hmac
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives import padding
-    from cryptography.hazmat.primitives.asymmetric import rsa, padding as asymmetricpadding
-    from cryptography.hazmat.primitives.serialization import load_der_private_key
+    from cryptography.hazmat.backends                   import default_backend
+    from cryptography.hazmat.primitives                 import ciphers, kdf, hashes, hmac, padding
+    from cryptography.hazmat.primitives.kdf.pbkdf2      import PBKDF2HMAC
+    from cryptography.hazmat.primitives.kdf.hkdf        import HKDF, HKDFExpand
+    from cryptography.hazmat.primitives.ciphers         import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.asymmetric      import rsa, padding as asymmetricpadding
+    from cryptography.hazmat.primitives.serialization   import load_der_private_key
+
 except ModuleNotFoundError:
     print("This script depends on the 'cryptography' package")
     print("pip install cryptography")
@@ -144,7 +148,7 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
     calculatedMAC = h.finalize()
     
     if mac != calculatedMAC:
-        print("ERROR: MAC did not match. Protected Symmetric Key was not decrypted.")
+        print("ERROR: MAC did not match. Protected Symmetric Key was not decrypted. (Password may be wrong)")
         sys.exit(1)
 
 
@@ -229,7 +233,7 @@ def decryptCipherString(CipherString, key, mackey):
                 # Try to decrypt CipherString as an Attachment Protected Symmetric Key
                 cleartext = decryptProtectedSymmetricKey(CipherString, BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0].hex()
             except Exception as e:
-                cleartext = f"ERROR decrypting: {CipherString}"
+                cleartext = f"ERROR Decrypting: {CipherString}"
 
         
         return(cleartext)
@@ -275,9 +279,20 @@ def decryptSend(send):
 
     return(decryptedSend)
 
+def isUUID(value):
+    try:
+        uuid.UUID(value)
+        return True
+    except ValueError:
+        return False
 
-def decryptBitwardenJSON(options):
-    decryptedEntries = {}
+def checkFileFormatVersion(options):
+
+    options.account = {}
+    email = ""
+    kdfIterations = ""
+    encKey = ""
+    encPrivateKey = ""
 
     try:
         with open(options.inputfile) as f:
@@ -286,87 +301,248 @@ def decryptBitwardenJSON(options):
         print(f"ERROR: {options.inputfile} not found.")
         sys.exit(1)
     except Exception as e:
-        print(f"ERROR: An error occured reading: {options.inputfile}")
+        print(f"ERROR: An error occurred reading: {options.inputfile}")
+        sys.exit(1)
+    
+
+    if datafile.get("userEmail") is None:
+        options.fileformat = "NEW"
+        accounts = []
+
+        for a in datafile:
+            if isUUID(a) and bool(datafile[a]['profile']):
+                options.account['UUID'] = a
+                options.account['email'] = datafile[a]['profile']['email']
+
+                accounts.append((options.account['UUID'], options.account['email']))
+        
+        # If data.json contains multiple accounts, prompt to select which to decrypt.
+        if (len(accounts) > 1):
+            print("Which Account Would You Like To Decrypt?")
+
+            for index, account in enumerate(accounts):
+                print(f" {index+1}:\t{account[1]}")
+            
+            choice = 0
+            print()
+            while (choice < 1 ) or (choice > len(accounts) ):
+                print("Enter Number: ", end="")
+                try:
+                    choice = int(input())
+                except ValueError:
+                    choice = 0
+            print()
+            
+            options.account['UUID'] = accounts[choice-1][0]
+            options.account['email'] = accounts[choice-1][1]
+
+        email = options.account['email']
+        kdfIterations = datafile[options.account['UUID']]['profile']['kdfIterations']
+        encKey = datafile[options.account['UUID']]['keys']['cryptoSymmetricKey']['encrypted']
+        encPrivateKey = datafile[options.account['UUID']]['keys']['privateKey']['encrypted']
+
+    else:
+        options.fileformat = "OLD"
+        options.account['UUID'] = datafile.get("userId")
+        options.account['email'] = datafile.get("userEmail")
+
+        email = datafile.get("userEmail")
+        kdfIterations = datafile.get("kdfIterations")
+        encKey = datafile.get("encKey")
+        encPrivateKey = datafile.get("encPrivateKey")
+
+    f.close()
+
+    return email, kdfIterations, encKey, encPrivateKey
+
+
+def decryptBitwardenJSON(options):
+    decryptedEntries = OrderedDict()
+
+    try:
+        with open(options.inputfile) as f:
+            datafile = json.load(f)
+    except FileNotFoundError:
+        print(f"ERROR: {options.inputfile} not found.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"ERROR: An error occurred reading: {options.inputfile}")
         sys.exit(1)
 
-    getBitwardenSecrets(datafile["userEmail"], \
-        getpass.getpass().encode("utf-8"), \
-        datafile["kdfIterations"], \
-        datafile["encKey"], \
-        datafile["encPrivateKey"]    )
+
+    email, kdfIterations, encKey, encPrivateKey = checkFileFormatVersion(options)
+
+    getBitwardenSecrets(email, \
+        getpass.getpass(prompt = f"Enter Password ({email}):").encode("utf-8"), \
+        kdfIterations, \
+        encKey, \
+        encPrivateKey)
 
 
     BitwardenSecrets['OrgSecrets'] = {}
-    encOrgKeys = list(datafile["encOrgKeys"])
-
-    for i in encOrgKeys:
-        BitwardenSecrets['OrgSecrets'][i] = decryptRSA(datafile["encOrgKeys"][i], BitwardenSecrets['RSAPrivateKey'])
-
     
+    # RegEx to find CipherString
     regexPattern = re.compile(r"\d\.[^,]+\|[^,]+=+")
     
-    for a in datafile:
+    # data.json file format changed in v1.30+
+    if (options.fileformat == "NEW"):
 
-        if a.startswith('folders_'):
-            group = "folders"
-        elif a.startswith('ciphers_'):
-            group = "items"
-        elif a.startswith('organizations_'):
-            group = "organizations"
-        elif a.startswith('collections_'):
-            group = "collections"
-        elif a.startswith('sends_') and options.includesends == True:
-            group = "sends"
-        else:
-            group = None
+        datafile = datafile[options.account['UUID']]
+        organizationKeys = datafile['keys']['organizationKeys']['encrypted']
+
+        # Get/Decrypt All Organization Keys
+        for uuid, key in organizationKeys.items():
+            BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(key, BitwardenSecrets['RSAPrivateKey'])
+
+        
+        for a in datafile['data']:
+
+            supportedGroups = ['folders', 'ciphers', 'collections', 'organizations']
+
+            if (any(x in a for x in supportedGroups)):
+                group = a
+            elif a == "sends" and options.includesends == True:
+                group = "sends"
+            else:
+                group = None
+            
+
+            if group:
+
+                if group == "organizations":
+                    groupData = datafile['data'][group]
+                else:
+                    groupData = datafile['data'][group]['encrypted']
+                
+                groupItemsList = []
+            
+                for b in groupData.items():
+                    groupEntries = json.loads(json.dumps(b))
+
+                    for c in groupEntries:
+                        groupItem = json.loads(json.dumps(c))
+
+                        if type(groupItem) is dict:
+                            tempString = json.dumps(groupItem)
+
+                            if group == "sends":
+                                tempString = decryptSend(groupItem)
+                            
+                            else:
+                                try:
+                                    if groupItem.get('organizationId') is None:
+                                        encKey = BitwardenSecrets['GeneratedEncryptionKey']
+                                        macKey = BitwardenSecrets['GeneratedMACKey']
+                                    else:
+                                        encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
+                                        macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
+
+                                    for match in regexPattern.findall(tempString):    
+                                        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
+                                        jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+                                        tempString = tempString.replace(match, jsonEscapedString)
+
+                                except Exception as e:
+                                    print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")
+
+                            # Get rid of the Bitwarden userId key/value pair.
+                            userIdString = f"\"userId\": \"{options.account['UUID']}\","
+                            tempString = tempString.replace(userIdString, "")   
+
+                            groupItemsList.append(json.loads(tempString))
+
+                    # Bitwarden Apps export "ciphers" as "items", changed here to be consistent.
+                    if (group == "ciphers"):
+                        group = "items"
+
+                    decryptedEntries[group] = groupItemsList
+
+    # old data.json file format
+    else:
+
+        # Get/Decrypt All Organization Keys
+        encOrgKeys = list(datafile["encOrgKeys"])
+
+        for i in encOrgKeys:
+            BitwardenSecrets['OrgSecrets'][i] = decryptRSA(datafile["encOrgKeys"][i], BitwardenSecrets['RSAPrivateKey'])
+
+        for a in datafile:
+
+            if a.startswith('folders_'):
+                group = "folders"
+            elif a.startswith('ciphers_'):
+                # Bitwarden Apps export "ciphers" as "items", changed here to be consistent.
+                group = "items"
+            elif a.startswith('organizations_'):
+                group = "organizations"
+            elif a.startswith('collections_'):
+                group = "collections"
+            elif a.startswith('sends_') and options.includesends == True:
+                group = "sends"
+            else:
+                group = None
 
 
-        if group:
-            groupData = json.loads(json.dumps(datafile[a]))
-            groupItemsList = []
-    
-            for b in groupData.items():
-                groupEntries = json.loads(json.dumps(b))
+            if group:
+                groupData = json.loads(json.dumps(datafile[a]))
+                groupItemsList = []
+        
+                for b in groupData.items():
+                    groupEntries = json.loads(json.dumps(b))
 
-                for c in groupEntries:
-                    groupItem = json.loads(json.dumps(c))
-                    
-                    if type(groupItem) is dict:
-                        tempString = json.dumps(groupItem)
-
-                        if group == "sends":
-                            tempString = decryptSend(groupItem)  
-
-                        else:
-                            try:
-                                if groupItem.get('organizationId') is None:
-                                    encKey = BitwardenSecrets['GeneratedEncryptionKey']
-                                    macKey = BitwardenSecrets['GeneratedMACKey']
-                                else:
-                                    encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
-                                    macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
-
-                                for match in regexPattern.findall(tempString):    
-                                    jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
-                                    jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
-                                    tempString = tempString.replace(match, jsonEscapedString)
-
-                            except Exception as e:
-                                print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")                        
+                    for c in groupEntries:
+                        groupItem = json.loads(json.dumps(c))
                         
+                        if type(groupItem) is dict:
+                            tempString = json.dumps(groupItem)
 
-                        # Get rid of the Bitwarden userId key/value pair.
-                        userIdString = f"\"userId\": \"{datafile['userId']}\","
-                        tempString = tempString.replace(userIdString, "")   
+                            if group == "sends":
+                                tempString = decryptSend(groupItem)  
 
-                        groupItemsList.append(json.loads(tempString))
-                    
-            decryptedEntries[group] = groupItemsList
+                            else:
+                                try:
+                                    if groupItem.get('organizationId') is None:
+                                        encKey = BitwardenSecrets['GeneratedEncryptionKey']
+                                        macKey = BitwardenSecrets['GeneratedMACKey']
+                                    else:
+                                        encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
+                                        macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
+
+                                    for match in regexPattern.findall(tempString):    
+                                        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
+                                        jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+                                        tempString = tempString.replace(match, jsonEscapedString)
+
+                                except Exception as e:
+                                    print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")          
+                            
+
+                            # Get rid of the Bitwarden userId key/value pair.
+                            userIdString = f"\"userId\": \"{datafile['userId']}\","
+                            tempString = tempString.replace(userIdString, "")   
+
+                            groupItemsList.append(json.loads(tempString))
+                        
+                decryptedEntries[group] = groupItemsList
+
+    # Bitwarden exports always have "folders" first, not sure if it makes a difference for re-import.
+    decryptedEntries.move_to_end('folders', False)
+    
+    # Move Sends to end.
+    if(decryptedEntries.get('sends')):
+        decryptedEntries.move_to_end('sends')
 
     return(json.dumps(decryptedEntries, indent=2, ensure_ascii=False))
 
 
 def main(options):
+    print()
+    if (options.outputfile):
+        if os.path.isfile(options.outputfile):
+            print(f"Saving Output To: {options.outputfile} (File Exists, Will Be Overwritten)\n")
+        else:
+            print(f"Saving Output To: {options.outputfile}\n")
+    
     decryptedJSON = decryptBitwardenJSON(options)
 
     if (options.outputfile):
@@ -381,9 +557,9 @@ def main(options):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(allow_abbrev=False, description='Decrypts an encrypted Bitwarden data.json file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE (optional)')
+    parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE')
     parser.add_argument("--includesends", help="Include Sends in the output.", action="store_true", default=False)
-    parser.add_argument("--output", metavar='OUTPUTFILE', action="store", dest='outputfile', help='Saves decrypted output to OUTPUTFILE (optional)')
+    parser.add_argument("--output", metavar='OUTPUTFILE', action="store", dest='outputfile', help='Saves decrypted output to OUTPUTFILE')
     args = parser.parse_args()
 
     main(args)
