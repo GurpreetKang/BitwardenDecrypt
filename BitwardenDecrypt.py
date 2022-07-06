@@ -141,7 +141,7 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
     mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
 
     if encType != 2:
-        print(f"ERROR: Protected Symmetric Key was not decrypted. Unsupported encType ({encType})\n\n" \
+        print(f"ERROR: Protected Symmetric Key was not decrypted. Unsupported EncryptionType: {encType}\n\n"
                "Rotating your account encryption key should resolve this for future backups of data.json.\n" \
                "Unfortunately a new sync/backup will be required after rotaion. \n\n\n" \
                "https://bitwarden.com/help/account-encryption-key/#rotate-your-encryption-key")
