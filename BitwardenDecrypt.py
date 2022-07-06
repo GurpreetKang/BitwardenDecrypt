@@ -12,7 +12,7 @@
 # Decrypts an encrypted Bitwarden data.json file (from the Desktop App).
 #
 # To determine the location of the data.json file see:
-# https://bitwarden.com/help/article/where-is-data-stored-computer/
+# https://bitwarden.com/help/data-storage/#on-your-local-machine
 #
 # Note: BitwardenDecrypt does not work with Bitwarden Encrypted JSON Exports.
 #       These exports lack the Protected Symmetric Key needed to decrypt entries.
