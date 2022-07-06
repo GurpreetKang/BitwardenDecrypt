@@ -136,16 +136,18 @@ def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
 
 def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
     encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
+    if encType != 2:
+        print(f"ERROR: Protected Symmetric Key was not decrypted. Unsupported EncryptionType: {encType}\n\n"
+              "Rotating your account encryption key should resolve this for future backups of data.json.\n"
+              "Unfortunately a new sync/backup will be required after rotaion. \n\n\n"
+              "https://bitwarden.com/help/account-encryption-key/#rotate-your-encryption-key")
+        exit(1)
+
     iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
     ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
     mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
 
-    if encType != 2:
-        print(f"ERROR: Protected Symmetric Key was not decrypted. Unsupported EncryptionType: {encType}\n\n"
-               "Rotating your account encryption key should resolve this for future backups of data.json.\n" \
-               "Unfortunately a new sync/backup will be required after rotaion. \n\n\n" \
-               "https://bitwarden.com/help/account-encryption-key/#rotate-your-encryption-key")
-        exit(1)
+
 
     # Calculate CipherString MAC
     h = hmac.HMAC(mastermac, hashes.SHA256(), backend=default_backend())
