@@ -534,7 +534,8 @@ def decryptBitwardenJSON(options):
                 decryptedEntries[group] = groupItemsList
 
     # Bitwarden exports always have "folders" first, not sure if it makes a difference for re-import.
-    decryptedEntries.move_to_end('folders', False)
+    if(decryptedEntries.get('folders')):
+        decryptedEntries.move_to_end('folders', False)
     
     # Move Sends to end.
     if(decryptedEntries.get('sends')):
