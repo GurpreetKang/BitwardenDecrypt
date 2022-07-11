@@ -425,10 +425,9 @@ def decryptBitwardenJSON(options):
                 groupItemsList = []
             
                 for b in groupData.items():
-                    groupEntries = json.loads(json.dumps(b))
+                    groupEntries = list(b)
 
-                    for c in groupEntries:
-                        groupItem = json.loads(json.dumps(c))
+                    for groupItem in groupEntries:
 
                         if type(groupItem) is dict:
                             tempString = json.dumps(groupItem)
@@ -492,14 +491,13 @@ def decryptBitwardenJSON(options):
 
 
             if group:
-                groupData = json.loads(json.dumps(datafile[a]))
+                groupData = datafile[a]
                 groupItemsList = []
         
                 for b in groupData.items():
-                    groupEntries = json.loads(json.dumps(b))
+                    groupEntries = list(b)
 
-                    for c in groupEntries:
-                        groupItem = json.loads(json.dumps(c))
+                    for groupItem in groupEntries:
                         
                         if type(groupItem) is dict:
                             tempString = json.dumps(groupItem)
