@@ -399,10 +399,17 @@ def decryptBitwardenJSON(options):
         organizationKeys = datafile['keys']['organizationKeys']['encrypted']
 
         # Get/Decrypt All Organization Keys
-        for uuid, key in organizationKeys.items():
-            BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(key, BitwardenSecrets['RSAPrivateKey'])
+        for uuid, value in organizationKeys.items():
+            # File Format >= Desktop 2022.8.0
+            if type(value) is dict:
+                BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value['key'], BitwardenSecrets['RSAPrivateKey'])
+            # File Format < Desktop 2022.8.0
+            elif type(value) is str:
+                BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value, BitwardenSecrets['RSAPrivateKey'])
+            else:
+                print(f"ERROR: Could Not Determine Organization Keys From File Format")
 
-        
+
         for a in datafile['data']:
 
             supportedGroups = ['folders', 'ciphers', 'collections', 'organizations']
