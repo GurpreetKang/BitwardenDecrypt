@@ -16,6 +16,9 @@
 #
 # Note: BitwardenDecrypt does not work with Bitwarden Encrypted JSON Exports.
 #       These exports lack the Protected Symmetric Key needed to decrypt entries.
+#       Password Protected Encrypted JSON Exports are supported.
+#
+#       Attachments are not supported (they are not stored locally in data.json).
 #
 #
 # Outputs JSON containing:
@@ -297,10 +300,10 @@ def isUUID(value):
 def checkFileFormatVersion(options):
 
     options.account = {}
-    email = ""
-    kdfIterations = ""
-    encKey = ""
-    encPrivateKey = ""
+    email = None
+    kdfIterations = None
+    encKey = None
+    encPrivateKey = None
 
     try:
         with open(options.inputfile) as f:
@@ -313,7 +316,17 @@ def checkFileFormatVersion(options):
         sys.exit(1)
     
 
-    if datafile.get("userEmail") is None:
+    # Check if datafile is a password protected excrypted json export.
+    if datafile.get("encrypted") is True and datafile.get("passwordProtected"):
+        options.fileformat = "EncryptedJSON"
+
+        # Email address is used as the salt in data.json, in password protected excrypted json exports there is an explicit salt key/value (and no email).
+        email = datafile.get("salt")
+        kdfIterations = int(datafile.get("kdfIterations"))
+        encKey = datafile.get("encKeyValidation_DO_NOT_EDIT")
+
+    # Check if data.json is new/old format.
+    elif datafile.get("userEmail") is None:
         options.fileformat = "NEW"
         accounts = []
 
@@ -380,8 +393,11 @@ def decryptBitwardenJSON(options):
 
     email, kdfIterations, encKey, encPrivateKey = checkFileFormatVersion(options)
 
+    # Set prompt text for when entering password.
+    prompt_text = "EncryptedJSON" if options.fileformat == "EncryptedJSON" else email
+
     getBitwardenSecrets(email, \
-        getpass.getpass(prompt = f"Enter Password ({email}):").encode("utf-8"), \
+        getpass.getpass(prompt = f"Enter Password ({prompt_text}):").encode("utf-8"), \
         kdfIterations, \
         encKey, \
         encPrivateKey)
@@ -391,9 +407,19 @@ def decryptBitwardenJSON(options):
     
     # RegEx to find CipherString
     regexPattern = re.compile(r"\d\.[^,]+\|[^,]+=+")
+
+    if (options.fileformat == "EncryptedJSON"):
+        EncryptedJSON = datafile.get("data")
+
+        encKey = BitwardenSecrets['StretchedEncryptionKey']
+        macKey = BitwardenSecrets['StretchedMACKey']
+
+        decryptedEntries = OrderedDict(json.loads(decryptCipherString(EncryptedJSON, encKey, macKey)))
+
     
+    elif (options.fileformat == "NEW"):
     # data.json file format changed in v1.30+
-    if (options.fileformat == "NEW"):
+    #if (options.fileformat == "NEW"):
 
         datafile = datafile[options.account['UUID']]
         organizationKeys = datafile['keys']['organizationKeys']['encrypted']
