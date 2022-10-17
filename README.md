@@ -9,7 +9,6 @@ https://bitwarden.com/help/data-storage/#on-your-local-machine
 These exports lack the Protected Symmetric Key needed to decrypt entries.*
 
 *Password Protected Encrypted JSON Exports* are supported.
-Currently these can only be created using the [Bitwarden CLI](https://bitwarden.com/help/cli/#export).
 
 
 <br/>
