@@ -317,7 +317,7 @@ def checkFileFormatVersion(options):
     
 
     # Check if datafile is a password protected excrypted json export.
-    if datafile.get("encrypted") is True and datafile.get("passwordProtected"):
+    if datafile.get("encrypted") and datafile.get("passwordProtected"):
         options.fileformat = "EncryptedJSON"
 
         # Email address is used as the salt in data.json, in password protected excrypted json exports there is an explicit salt key/value (and no email).
@@ -418,8 +418,7 @@ def decryptBitwardenJSON(options):
 
     
     elif (options.fileformat == "NEW"):
-    # data.json file format changed in v1.30+
-    #if (options.fileformat == "NEW"):
+        # data.json file format changed in v1.30+
 
         datafile = datafile[options.account['UUID']]
         organizationKeys = datafile['keys']['organizationKeys']['encrypted']
