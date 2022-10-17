@@ -8,6 +8,10 @@ https://bitwarden.com/help/data-storage/#on-your-local-machine
 *Note: BitwardenDecrypt does not work with Bitwarden Encrypted JSON Exports.<br/>
 These exports lack the Protected Symmetric Key needed to decrypt entries.*
 
+*Password Protected Encrypted JSON Exports* are supported.
+Currently these can only be created using the [Bitwarden CLI](https://bitwarden.com/help/cli/#export).
+
+
 <br/>
 
 Outputs JSON containing:
@@ -61,8 +65,10 @@ https://paypal.me/GurpreetKang
 
 ## Limitations
 
+- Attachments are not supported (they are not stored locally in data.json)
 - Does not work with Bitwarden Encrypted JSON Exports.
 <br/>*These exports lack the Protected Symmetric Key needed to decrypt entries.*
+<br/>(Password Protected Encrypted JSON Exports are now supported)
 - ~~No validation of the CipherString.
 I.e. No verification of the MAC before decrypting.~~ Now verifies the MAC.
 - Can only decrypt EncryptionType: 2 (AesCbc256_HmacSha256_B64).  At the time of writing this is the default used for all entries in the personal vault.
