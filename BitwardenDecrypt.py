@@ -306,7 +306,7 @@ def checkFileFormatVersion(options):
     encPrivateKey = None
 
     try:
-        with open(options.inputfile) as f:
+        with open(options.inputfile, encoding="utf-8") as f:
             datafile = json.load(f)
     except FileNotFoundError:
         print(f"ERROR: {options.inputfile} not found.")
@@ -330,12 +330,18 @@ def checkFileFormatVersion(options):
         options.fileformat = "NEW"
         accounts = []
 
-        for a in datafile:
-            if isUUID(a) and bool(datafile[a]['profile']):
-                options.account['UUID'] = a
-                options.account['email'] = datafile[a]['profile']['email']
+        for key in datafile:
+            if isUUID(key) and len(datafile[key]['profile']) > 0:
+                options.account['UUID'] = key
+                options.account['email'] = datafile[key]['profile']['email']
 
                 accounts.append((options.account['UUID'], options.account['email']))
+        
+        # If data.json contains no accounts then exit.
+        # This occurs when the desktop app logs out and clears account data from data.json
+        if (len(accounts) == 0):
+            print(f"ERROR: No Accounts Found In {options.inputfile}")
+            exit(1)
         
         # If data.json contains multiple accounts, prompt to select which to decrypt.
         if (len(accounts) > 1):
@@ -381,7 +387,7 @@ def decryptBitwardenJSON(options):
     decryptedEntries = OrderedDict()
 
     try:
-        with open(options.inputfile) as f:
+        with open(options.inputfile, encoding="utf-8") as f:
             datafile = json.load(f)
     except FileNotFoundError:
         print(f"ERROR: {options.inputfile} not found.")
@@ -586,12 +592,13 @@ def main(options):
 
     if (options.outputfile):
         try:
-            with open(options.outputfile, "w") as file:
+            with open(options.outputfile, "w", encoding="utf-8") as file:
                 file.write(decryptedJSON)
-        except:
+        except Exception as e:
             print(f"ERROR: Writing to {options.outputfile}")
+
     else:
-        print(decryptedJSON)
+        print(decryptedJSON.encode("utf-8"))
 
 
 if __name__ == "__main__":
