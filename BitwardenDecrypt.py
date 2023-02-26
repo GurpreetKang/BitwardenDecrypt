@@ -53,7 +53,7 @@ import sys
 import uuid
 
 
-# This script depends on the 'cryptography' package
+# This script depends on the 'cryptography' and 'argon2' package
 # pip install cryptography
 try:
     from cryptography.hazmat.backends                   import default_backend
@@ -63,6 +63,7 @@ try:
     from cryptography.hazmat.primitives.ciphers         import Cipher, algorithms, modes
     from cryptography.hazmat.primitives.asymmetric      import rsa, padding as asymmetricpadding
     from cryptography.hazmat.primitives.serialization   import load_der_private_key
+    import argon2
 
 except ModuleNotFoundError:
     print("This script depends on the 'cryptography' package")
@@ -71,24 +72,44 @@ except ModuleNotFoundError:
 
 BitwardenSecrets = {}
 
-def getBitwardenSecrets(email, password, kdfIterations, encKey, encPrivateKey):
+def getBitwardenSecrets(email, password, kdfIterations, kdfMemory, kdfParallelism, kdfType, encKey, encPrivateKey):
     BitwardenSecrets['email']           = email
     BitwardenSecrets['kdfIterations']   = kdfIterations
+    BitwardenSecrets['kdfMemory']   = kdfMemory
+    BitwardenSecrets['kdfParallelism']   = kdfParallelism
+    BitwardenSecrets['kdfType']   = kdfType
     BitwardenSecrets['MasterPassword']  = password
     BitwardenSecrets['ProtectedSymmetricKey'] = encKey
     BitwardenSecrets['ProtectedRSAPrivateKey'] = encPrivateKey
 
-    
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=bytes(BitwardenSecrets['email'], 'utf-8'),
-        iterations=BitwardenSecrets['kdfIterations'],
-        backend=default_backend()
-        )
-    BitwardenSecrets['MasterKey']       = kdf.derive(BitwardenSecrets['MasterPassword'])
-    BitwardenSecrets['MasterKey_b64']   = base64.b64encode(BitwardenSecrets['MasterKey']).decode('utf-8')
 
+    if (BitwardenSecrets['kdfType']==1):
+        #argon2id
+        ph = hashes.Hash(hashes.SHA256(),default_backend())
+        ph.update(bytes(BitwardenSecrets['email'], 'utf-8'))
+        saltHash = ph.finalize()
+        BitwardenSecrets['MasterKey'] = argon2.low_level.hash_secret_raw(
+            BitwardenSecrets['MasterPassword'],
+            saltHash,
+            time_cost=BitwardenSecrets['kdfIterations'],
+            memory_cost=BitwardenSecrets['kdfMemory'] * 1024,
+            parallelism=BitwardenSecrets['kdfParallelism'],
+            hash_len=32,
+            type=argon2.low_level.Type.ID
+            )
+        BitwardenSecrets['MasterKey_b64']   = base64.b64encode(BitwardenSecrets['MasterKey']).decode('utf-8')
+    
+    else:
+        #PBKDF2HMAC
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=bytes(BitwardenSecrets['email'], 'utf-8'),
+            iterations=BitwardenSecrets['kdfIterations'],
+            backend=default_backend()
+            )
+        BitwardenSecrets['MasterKey']       = kdf.derive(BitwardenSecrets['MasterPassword'])
+        BitwardenSecrets['MasterKey_b64']   = base64.b64encode(BitwardenSecrets['MasterKey']).decode('utf-8')
 
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -302,6 +323,9 @@ def checkFileFormatVersion(options):
     options.account = {}
     email = None
     kdfIterations = None
+    kdfMemory = None
+    kdfParallelism = None
+    kdfType = None    
     encKey = None
     encPrivateKey = None
 
@@ -316,13 +340,14 @@ def checkFileFormatVersion(options):
         sys.exit(1)
     
 
-    # Check if datafile is a password protected excrypted json export.
+    # Check if datafile is a password protected encrypted json export.
     if datafile.get("encrypted") and datafile.get("passwordProtected"):
         options.fileformat = "EncryptedJSON"
 
         # Email address is used as the salt in data.json, in password protected excrypted json exports there is an explicit salt key/value (and no email).
         email = datafile.get("salt")
         kdfIterations = int(datafile.get("kdfIterations"))
+        kdfType = 0         
         encKey = datafile.get("encKeyValidation_DO_NOT_EDIT")
 
     # Check if data.json is new/old format.
@@ -365,6 +390,11 @@ def checkFileFormatVersion(options):
 
         email = options.account['email']
         kdfIterations = datafile[options.account['UUID']]['profile']['kdfIterations']
+        if ('kdfMemory' in datafile[options.account['UUID']]['profile']):
+            kdfMemory = datafile[options.account['UUID']]['profile']['kdfMemory']
+        if ('kdfParallelism' in datafile[options.account['UUID']]['profile']):    
+            kdfParallelism = datafile[options.account['UUID']]['profile']['kdfParallelism']
+        kdfType = datafile[options.account['UUID']]['profile']['kdfType']
         encKey = datafile[options.account['UUID']]['keys']['cryptoSymmetricKey']['encrypted']
         encPrivateKey = datafile[options.account['UUID']]['keys']['privateKey']['encrypted']
 
@@ -375,12 +405,13 @@ def checkFileFormatVersion(options):
 
         email = datafile.get("userEmail")
         kdfIterations = datafile.get("kdfIterations")
+        kdfType = 0
         encKey = datafile.get("encKey")
         encPrivateKey = datafile.get("encPrivateKey")
 
     f.close()
 
-    return email, kdfIterations, encKey, encPrivateKey
+    return email, kdfIterations, kdfMemory, kdfParallelism, kdfType, encKey, encPrivateKey
 
 
 def decryptBitwardenJSON(options):
@@ -397,7 +428,7 @@ def decryptBitwardenJSON(options):
         sys.exit(1)
 
 
-    email, kdfIterations, encKey, encPrivateKey = checkFileFormatVersion(options)
+    email, kdfIterations, kdfMemory, kdfParallelism, kdfType, encKey, encPrivateKey = checkFileFormatVersion(options)
 
     # Set prompt text for when entering password.
     prompt_text = "EncryptedJSON" if options.fileformat == "EncryptedJSON" else email
@@ -405,6 +436,9 @@ def decryptBitwardenJSON(options):
     getBitwardenSecrets(email, \
         getpass.getpass(prompt = f"Enter Password ({prompt_text}):").encode("utf-8"), \
         kdfIterations, \
+        kdfMemory, \
+        kdfParallelism, \
+        kdfType, \
         encKey, \
         encPrivateKey)
 
