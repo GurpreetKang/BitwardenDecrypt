@@ -53,7 +53,7 @@ import sys
 import uuid
 
 
-# This script depends on the 'cryptography' and 'argon2' package
+# This script depends on the 'cryptography' package
 # pip install cryptography
 try:
     from cryptography.hazmat.backends                   import default_backend
@@ -63,12 +63,21 @@ try:
     from cryptography.hazmat.primitives.ciphers         import Cipher, algorithms, modes
     from cryptography.hazmat.primitives.asymmetric      import rsa, padding as asymmetricpadding
     from cryptography.hazmat.primitives.serialization   import load_der_private_key
-    import argon2
 
 except ModuleNotFoundError:
     print("This script depends on the 'cryptography' package")
     print("pip install cryptography")
     sys.exit(1)
+    
+# This script depends on the 'argon2-cffi' package
+# pip install argon2-cffi
+try:
+    import argon2
+
+except ModuleNotFoundError:
+    print("This script depends on the 'argon2-cffi' package")
+    print("pip install argon2-cffi")
+    sys.exit(1)    
 
 BitwardenSecrets = {}
 
