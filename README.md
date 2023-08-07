@@ -37,6 +37,9 @@ Options:
         --includesends          Include Sends in the output.
         --output OUTPUTFILE     Write decrypted output to file.
                                 Will overwrite contents if file exists.
+        --output-encoding ENCODING
+                                Specify encoding to use for --output.
+                                (defaults to the current locale encoding)
 ```
 On Windows:
 ```
@@ -50,6 +53,9 @@ Options:
         --includesends          Include Sends in the output.
         --output OUTPUTFILE     Write decrypted output to file.
                                 Will overwrite contents if file exists.
+        --output-encoding ENCODING
+                                Specify encoding to use for --output
+                                (defaults to 'utf-8')
 ```
 *Note: This script depends on the 'cryptography' package  
 pip install cryptography*
