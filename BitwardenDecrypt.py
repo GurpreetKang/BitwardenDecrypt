@@ -404,7 +404,10 @@ def checkFileFormatVersion(options):
         if ('kdfParallelism' in datafile[options.account['UUID']]['profile']):    
             kdfParallelism = datafile[options.account['UUID']]['profile']['kdfParallelism']
         kdfType = datafile[options.account['UUID']]['profile']['kdfType']
-        encKey = datafile[options.account['UUID']]['keys']['cryptoSymmetricKey']['encrypted']
+        if ('masterKeyEncryptedUserKey' in datafile[options.account['UUID']]['keys']):
+            encKey = datafile[options.account['UUID']]['keys']['masterKeyEncryptedUserKey']
+        else:
+            encKey = datafile[options.account['UUID']]['keys']['cryptoSymmetricKey']['encrypted']
         encPrivateKey = datafile[options.account['UUID']]['keys']['privateKey']['encrypted']
 
     else:
@@ -473,15 +476,16 @@ def decryptBitwardenJSON(options):
         organizationKeys = datafile['keys']['organizationKeys']['encrypted']
 
         # Get/Decrypt All Organization Keys
-        for uuid, value in organizationKeys.items():
-            # File Format >= Desktop 2022.8.0
-            if type(value) is dict:
-                BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value['key'], BitwardenSecrets['RSAPrivateKey'])
-            # File Format < Desktop 2022.8.0
-            elif type(value) is str:
-                BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value, BitwardenSecrets['RSAPrivateKey'])
-            else:
-                print(f"ERROR: Could Not Determine Organization Keys From File Format")
+        if len(datafile['keys']['organizationKeys']['encrypted']) > 0:
+            for uuid, value in organizationKeys.items():
+                # File Format >= Desktop 2022.8.0
+                if type(value) is dict:
+                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value['key'], BitwardenSecrets['RSAPrivateKey'])
+                # File Format < Desktop 2022.8.0
+                elif type(value) is str:
+                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value, BitwardenSecrets['RSAPrivateKey'])
+                else:
+                    print(f"ERROR: Could Not Determine Organization Keys From File Format")
 
 
         for a in datafile['data']:
