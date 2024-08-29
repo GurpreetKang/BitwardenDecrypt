@@ -528,11 +528,21 @@ def decryptBitwardenJSON(options):
                                     else:
                                         encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
                                         macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
+                                    
+                                    # Cipher Key decryption    
+                                    if groupItem.get('key', None) is None:
+                                        cipherEncKey = encKey
+                                        cipherMacKey = macKey
+                                    else:
+                                        cipherKey, \
+                                        cipherEncKey, \
+                                        cipherMacKey = decryptProtectedSymmetricKey(groupItem.get('key'), encKey, macKey) 
 
-                                    for match in regexPattern.findall(tempString):    
-                                        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
+                                    for match in regexPattern.findall(tempString):
+                                        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, cipherEncKey, cipherMacKey))
                                         jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
                                         tempString = tempString.replace(match, jsonEscapedString)
+                                        tempString = tempString.replace('"key": "ERROR: MAC did not match. CipherString not decrypted."', '"key": ""')
 
                                 except Exception as e:
                                     print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")
