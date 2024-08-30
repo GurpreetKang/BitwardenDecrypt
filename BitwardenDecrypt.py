@@ -359,7 +359,54 @@ def checkFileFormatVersion(options):
         kdfType = 0         
         encKey = datafile.get("encKeyValidation_DO_NOT_EDIT")
 
-    # Check if data.json is new/old format.
+    # Check if data.json is 2024/new/old format.
+    elif datafile.get("global_account_accounts"):
+        options.fileformat = "2024"
+        accounts = []
+
+        for key in datafile['global_account_accounts']:
+            if isUUID(key) and len(datafile['global_account_accounts'][key]) > 0:
+                options.account['UUID'] = key
+                options.account['email'] = datafile['global_account_accounts'][key]['email']
+
+                accounts.append((options.account['UUID'], options.account['email']))
+        
+        # If data.json contains no accounts then exit.
+        # This occurs when the desktop app logs out and clears account data from data.json
+        if (len(accounts) == 0):
+            print(f"ERROR: No Accounts Found In {options.inputfile}")
+            exit(1)
+        
+        # If data.json contains multiple accounts, prompt to select which to decrypt.
+        if (len(accounts) > 1):
+            print("Which Account Would You Like To Decrypt?")
+
+            for index, account in enumerate(accounts):
+                print(f" {index+1}:\t{account[1]}")
+            
+            choice = 0
+            print()
+            while (choice < 1 ) or (choice > len(accounts) ):
+                print("Enter Number: ", end="")
+                try:
+                    choice = int(input())
+                except ValueError:
+                    choice = 0
+            print()
+            
+            options.account['UUID'] = accounts[choice-1][0]
+            options.account['email'] = accounts[choice-1][1]
+
+        email = options.account['email']
+        kdfIterations = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['iterations']
+        if ('memory' in datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']):
+            kdfMemory = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['memory']
+        if ('parallelism' in datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']):    
+            kdfParallelism = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['parallelism']
+        kdfType = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['kdfType']
+        encKey = datafile['user_' + options.account['UUID'] + '_masterPassword_masterKeyEncryptedUserKey']
+        encPrivateKey = datafile['user_' + options.account['UUID'] + '_crypto_privateKey']
+    
     elif datafile.get("userEmail") is None:
         options.fileformat = "NEW"
         accounts = []
@@ -468,6 +515,98 @@ def decryptBitwardenJSON(options):
 
         decryptedEntries = OrderedDict(json.loads(decryptCipherString(EncryptedJSON, encKey, macKey)))
 
+    elif (options.fileformat == "2024"):
+        # data.json file format changed in year 2024 - version 2024.7.1
+
+        organizationKeys = datafile['user_' + options.account['UUID'] + '_crypto_organizationKeys']
+
+        # Get/Decrypt All Organization Keys
+        if len(datafile['user_' + options.account['UUID'] + '_crypto_organizationKeys']) > 0:
+            for uuid, value in organizationKeys.items():
+                # File Format >= Desktop 2022.8.0
+                if type(value) is dict:
+                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value['key'], BitwardenSecrets['RSAPrivateKey'])
+                # File Format < Desktop 2022.8.0
+                elif type(value) is str:
+                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value, BitwardenSecrets['RSAPrivateKey'])
+                else:
+                    print(f"ERROR: Could Not Determine Organization Keys From File Format")
+        
+        supportedGroups = ['folder_folders', 'ciphers_ciphers', 'collection_collections', 'organizations_organizations']        
+
+        for group in supportedGroups:
+
+            groupData = datafile['user_' + options.account['UUID'] + '_' + group]
+            
+            groupItemsList = []
+            
+            for b in groupData.items():
+                groupEntries = list(b)
+
+                for groupItem in groupEntries:
+
+                    if type(groupItem) is dict:
+                        tempString = json.dumps(groupItem)
+
+                        try:
+                            if groupItem.get('organizationId') is None:
+                                encKey = BitwardenSecrets['GeneratedEncryptionKey']
+                                macKey = BitwardenSecrets['GeneratedMACKey']
+                            else:
+                                encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
+                                macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
+                                    
+                            # Cipher Key decryption    
+                            if groupItem.get('key', None) is None:
+                                cipherEncKey = encKey
+                                cipherMacKey = macKey
+                            else:
+                                cipherKey, \
+                                cipherEncKey, \
+                                cipherMacKey = decryptProtectedSymmetricKey(groupItem.get('key'), encKey, macKey) 
+
+                            for match in regexPattern.findall(tempString):
+                                jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, cipherEncKey, cipherMacKey))
+                                jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+                                tempString = tempString.replace(match, jsonEscapedString)
+                                tempString = tempString.replace('"key": "ERROR: MAC did not match. CipherString not decrypted."', '"key": ""')
+
+                        except Exception as e:
+                            print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")
+
+                        # Get rid of the Bitwarden userId/organizationUserId key/value pair.
+                        regString =  r"\"(organization)*[uU]serId\":\s\"\S*\","
+                        tempString = re.sub(regString, "", tempString)
+
+                        groupItemsList.append(json.loads(tempString))
+
+                # Change exported groups to be consistent with NEW format.
+                if (group == "folder_folders"):
+                    group = "folders"
+                elif (group == "ciphers_ciphers"):
+                    group = "items"
+                elif (group == "collection_collections"):
+                    group = "collections"
+                elif (group == "organizations_organizations"):
+                    group = "organizations"
+
+                decryptedEntries[group] = groupItemsList
+                
+        #Sends
+        if options.includesends == True:
+            
+            groupData = datafile['user_' + options.account['UUID'] + '_encryptedSend_sendUserEncrypted']
+            groupItemsList = []
+            
+            for b in groupData.items():
+                groupEntries = list(b)
+
+                for groupItem in groupEntries:
+                    if type(groupItem) is dict:
+                        tempString = decryptSend(groupItem)
+                        groupItemsList.append(json.loads(tempString))
+
+                decryptedEntries["sends"] = groupItemsList
     
     elif (options.fileformat == "NEW"):
         # data.json file format changed in v1.30+
