@@ -773,7 +773,11 @@ def decryptBitwardenJSON(options):
     if(decryptedEntries.get('sends')):
         decryptedEntries.move_to_end('sends')
 
-    return(json.dumps(decryptedEntries, indent=2, ensure_ascii=False))
+    return decryptedEntries
+
+
+def write_json(decryptedEntries, file):
+    json.dump(decryptedEntries, file, indent=2, ensure_ascii=False)
 
 
 def main(options):
@@ -784,17 +788,24 @@ def main(options):
         else:
             print(f"Saving Output To: {options.outputfile}\n")
     
-    decryptedJSON = decryptBitwardenJSON(options)
+    decryptedEntries = decryptBitwardenJSON(options)
+
+    encoding = options.encoding
+    # Force UTF-8 on Windows unless otherwise configured
+    if encoding is None and sys.platform == 'win32' and os.getenv('PYTHONIOENCODING') is None:
+        encoding = 'utf-8'
 
     if (options.outputfile):
         try:
-            with open(options.outputfile, "w", encoding="utf-8") as file:
-                file.write(decryptedJSON)
+            with open(options.outputfile, "w", encoding=encoding) as file:
+                write_json(decryptedEntries, file)
         except Exception as e:
             print(f"ERROR: Writing to {options.outputfile}")
 
     else:
-        print(decryptedJSON.encode("utf-8"))
+        if encoding is not None:
+            sys.stdout.reconfigure(encoding=encoding)
+        write_json(decryptedEntries, sys.stdout)
 
 
 if __name__ == "__main__":
@@ -802,6 +813,7 @@ if __name__ == "__main__":
     parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE')
     parser.add_argument("--includesends", help="Include Sends in the output.", action="store_true", default=False)
     parser.add_argument("--output", metavar='OUTPUTFILE', action="store", dest='outputfile', help='Saves decrypted output to OUTPUTFILE')
+    parser.add_argument("--output-encoding", metavar='ENCODING', action="store", dest='encoding', help='Specify encoding to use for --output')
     args = parser.parse_args()
 
     main(args)
