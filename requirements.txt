@@ -1,1 +1,2 @@
 cryptography>=3.3.2
+argon2-cffi>=18.2.0
