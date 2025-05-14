@@ -357,8 +357,9 @@ def checkFileFormatVersion(options):
         email = datafile.get("salt")
         kdfType = int(datafile.get("kdfType"))
         kdfIterations = int(datafile.get("kdfIterations"))
-        kdfMemory = int(datafile.get("kdfMemory"))
-        kdfParallelism = int(datafile.get("kdfParallelism"))
+        if kdfType == 1:
+            kdfMemory = int(datafile.get("kdfMemory"))
+            kdfParallelism = int(datafile.get("kdfParallelism"))
         encKey = datafile.get("encKeyValidation_DO_NOT_EDIT")
 
     # Check if data.json is 2024/new/old format.
