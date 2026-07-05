@@ -295,8 +295,13 @@ def decryptRSA(CipherString, key):
     return(cleartext)
 
 def decryptSend(send):
-    sendKey = decryptProtectedSymmetricKey(send['key'], BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0]
-    
+    if '.' in send['key']:
+        sendKey = decryptProtectedSymmetricKey(send['key'], BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0]
+    else:
+        sendKey = bytes.fromhex(send['key'])
+
+    send['urlKey'] = base64.urlsafe_b64encode(sendKey).rstrip(b'=').decode()
+
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=64,
