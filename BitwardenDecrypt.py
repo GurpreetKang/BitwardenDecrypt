@@ -346,7 +346,7 @@ def checkFileFormatVersion(options):
     kdfIterations = None
     kdfMemory = None
     kdfParallelism = None
-    kdfType = None    
+    kdfType = None
     encKey = None
     encPrivateKey = None
 
@@ -368,7 +368,11 @@ def checkFileFormatVersion(options):
         # Email address is used as the salt in data.json, in password protected excrypted json exports there is an explicit salt key/value (and no email).
         email = datafile.get("salt")
         kdfIterations = int(datafile.get("kdfIterations"))
-        kdfType = 0         
+        if "kdfMemory" in datafile:
+            kdfMemory = int(datafile.get("kdfMemory"))
+        if "kdfParallelism" in datafile:
+            kdfParallelism = int(datafile.get("kdfParallelism"))
+        kdfType = int(datafile.get("kdfType", 0))
         encKey = datafile.get("encKeyValidation_DO_NOT_EDIT")
 
     # Check if data.json is 2024/new/old format.
